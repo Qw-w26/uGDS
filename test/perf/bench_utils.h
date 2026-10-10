@@ -1,11 +1,14 @@
 #ifndef __UGDS_BENCH_UTILS_H__
 #define __UGDS_BENCH_UTILS_H__
 
+#include <ugds.h>
+
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <pthread.h>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -14,6 +17,55 @@
 #define KB (1UL << 10)
 #define MB (1UL << 20)
 #define GB (1UL << 30)
+
+struct Worker {
+    uGDSHandle_t handle;
+    void* buffer;
+    unsigned iterations; /* Number of read operations planned */
+    unsigned completed; /* Actual number of read operations completed successfully */
+    uint64_t elapsed_ns; /* Time taken for the entire read loop, in nanoseconds */
+    const char* label;
+    bool failed;
+    unsigned failed_iteration;
+    ssize_t failed_result;
+};
+
+/* Test concurrent read performance */
+static void* read_worker(void* arg)
+{
+    Worker* worker = static_cast<Worker*>(arg);
+    struct timespec start = {}, end = {};
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (unsigned i = 0; i < worker->iterations; ++i) {
+        ssize_t result = uGDSRead(worker->handle, worker->buffer, 4096, 0, 0);
+        if (result != 4096) {
+            worker->failed = true;
+            worker->failed_iteration = i;
+            worker->failed_result = result;
+            break;
+        }
+        ++worker->completed;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    worker->elapsed_ns = static_cast<uint64_t>(end.tv_sec - start.tv_sec) *
+                         1000000000ULL + (end.tv_nsec - start.tv_nsec);
+    return nullptr;
+}
+
+static void report_worker_failure(const Worker& worker)
+{
+    if (!worker.failed) return;
+    fprintf(stderr, "%s: uGDSRead failed at iteration %u: returned %zd, expected 4096",
+            worker.label ? worker.label : "worker", worker.failed_iteration,
+            worker.failed_result);
+    if (worker.failed_result < 0) {
+        fprintf(stderr, " (errno=%d: %s)", static_cast<int>(-worker.failed_result),
+                strerror(static_cast<int>(-worker.failed_result)));
+    } else {
+        fprintf(stderr, " (short read)");
+    }
+    fputc('\n', stderr);
+}
 
 struct BenchOpts {
     const char* file_path = nullptr;
