@@ -128,14 +128,6 @@ uGDSStorageGetHandle(storage, 1, &device1);
 uGDSStorageDestroy(storage);
 ```
 
-The multi-device benchmark accepts two distinct device paths:
-
-```bash
-build/bench_multi_ssd -f /dev/ugds_drv0 -F /dev/ugds_drv1 [-d 0] [-n 1024]
-```
-
-This validates storage aggregation and concurrent reads; it does not automatically stripe IO across devices.
-
 For build instructions, environment setup, and driver management, see the **[Installation Guide](docs/installation.md)**.
 
 Run the [vLLM + LMCache + uGDS end-to-end benchmark](examples/vllm_lmcache_bench/README.md) to validate KV-cache offloading on a dedicated NVMe SSD.
@@ -171,6 +163,16 @@ scripts/run_tests.sh compare
 # Run all (functional + comparison)
 scripts/run_tests.sh all
 ```
+
+The functional test suite includes `test_storage_multi_ssd`. It validates multi-device handle aggregation and concurrent reads, and skips with code `77` when a second uGDS device is unavailable.
+
+For the dedicated multi-SSD performance benchmark, provide two distinct uGDS device paths explicitly:
+
+```bash
+build/bench_multi_ssd -f /dev/ugds_drv0 -F /dev/ugds_drv1 [-d 0] [-n 1024]
+```
+
+This benchmark validates storage aggregation and concurrent reads; it does not automatically stripe IO across devices.
 
 ## API Coverage
 
